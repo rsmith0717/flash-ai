@@ -14,10 +14,21 @@ const config = defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    host: '0.0.0.0',
+    port: 3000,
+    watch: {
+      usePolling: true,  // Required for Docker file system watching
+      interval: 1000,    // Polling interval in ms (adjust as needed)
+    },
+    hmr: {
+      host: 'localhost', // The host your browser uses to connect
+      port: 3000,
+    },
+  },
   plugins: [
     devtools(),
     nitro(),
-    // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
