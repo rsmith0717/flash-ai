@@ -1,0 +1,26 @@
+# Use a recent Node.js LTS slim image as the base for a lightweight environment
+FROM node:lts-bookworm-slim AS development
+
+# Enable Corepack to manage package managers like pnpm (built-in feature of recent Node.js versions)
+RUN corepack enable
+
+# Set environment variables for pnpm
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Set the working directory for your application
+WORKDIR /app
+
+# Copy only package.json and pnpm-lock.yaml to leverage Docker cache for dependencies
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+
+# Install dependencies. The source code will be bind-mounted later via Docker Compose
+# Use --frozen-lockfile for consistent installs
+RUN pnpm install --frozen-lockfile
+
+# Expose the port your frontend dev server runs on (commonly 3000, 5173, etc. - adjust as needed)
+EXPOSE 3000
+
+# The command to start your development server is usually defined in docker-compose.yml, 
+# but you can set a default here if desired:
+CMD ["pnpm", "run", "dev"] 

@@ -1,0 +1,334 @@
+import json
+from typing import List
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.init_db import get_db
+from app.exceptions.http_exceptions import (
+    InvalidPayScheduleException,
+    FlashcardNotFoundException,
+)
+from app.models import User
+from app.schemas.flashcard import (
+    DeckBase,
+    DeckPost,
+    DeckRead,
+    FlashcardBase,
+    FlashcardCreate,
+)
+from app.services.flashcard import (
+    create_deck,
+    create_flashcard,
+    delete_flashcard,
+    embed_and_store_flashcards,
+    get_deck_cards,
+    get_flashcard,
+    get_user_decks,
+    process_text_file_to_flashcards,
+    search_flashcard,
+    update_card,
+)
+from app.services.user import fastapi_users
+
+router = APIRouter(prefix="/cards", tags=["cards"])
+
+current_user = fastapi_users.current_user()
+
+
+@router.post("/", response_model=FlashcardBase)
+async def create_new_flashcard(
+    flashcard: FlashcardCreate, db: AsyncSession = Depends(get_db)
+):
+    try:
+        flashcard_model = await create_flashcard(db=db, flashcard=flashcard)
+        return flashcard_model
+    except DBAPIError as e:
+        print(e)
+        if "invalid input value for enum" in str(e):
+            raise InvalidPayScheduleException()
+        else:
+            raise
+
+
+@router.post("/deck", response_model=DeckRead)
+async def create_new_deck(
+    deck: DeckBase,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    try:
+        deck_model = await create_deck(db=db, name=deck.name, user_id=str(user.id))
+        return deck_model
+    except DBAPIError as e:
+        print(e)
+        if "invalid input value for enum" in str(e):
+            raise InvalidPayScheduleException()
+        else:
+            raise
+
+
+@router.post("/deck/json")
+async def generate_new_deck(
+    deck: DeckPost,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Create a new deck from JSON data submitted in the request body.
+
+    Expected format:
+    {
+        "deck_name": "My Deck",
+        "flashcards": [
+            {"question": "Q1", "answer": "A1"},
+            {"question": "Q2", "answer": "A2"}
+        ]
+    }
+    """
+    try:
+        print("The deck is : ", deck)
+        flash_card_list = [flashcard.model_dump() for flashcard in deck.flashcards]
+        print("The deck flashcards are: ", flash_card_list)
+        flash_cards = await embed_and_store_flashcards(
+            db, deck.deck_name, flash_card_list, user_id=str(user.id)
+        )
+        return flash_cards
+    except DBAPIError as e:
+        print(e)
+        raise
+
+
+@router.post("/deck/upload")
+async def upload_deck_from_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Create a new deck from a JSON file upload.
+
+    Expected file format:
+    {
+        "deck_name": "My Deck",
+        "flashcards": [
+            {"question": "Q1", "answer": "A1"},
+            {"question": "Q2", "answer": "A2"}
+        ]
+    }
+    """
+    try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(".json"):
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
+
+        # Read and parse the uploaded file
+        contents = await file.read()
+
+        try:
+            deck_data = json.loads(contents.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON file: {str(e)}")
+
+        # Extract deck name and flashcards from the uploaded data
+        deck_name = deck_data.get("deck_name")
+        flashcards = deck_data.get("flashcards", [])
+
+        if not deck_name:
+            raise HTTPException(
+                status_code=400, detail="deck_name is required in the JSON file"
+            )
+
+        if not flashcards:
+            raise HTTPException(
+                status_code=400, detail="flashcards list is required in the JSON file"
+            )
+
+        print(f"Uploaded deck: {deck_name} with {len(flashcards)} flashcards")
+
+        # Use the same shared function as the JSON endpoint
+        flash_cards = await embed_and_store_flashcards(
+            db, deck_name, flashcards, user_id=str(user.id)
+        )
+        return flash_cards
+    except DBAPIError as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/deck/upload/text")
+async def upload_text_file_for_flashcards(
+    file: UploadFile = File(...),
+    deck_name: str = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Create flashcards from a text file using AI-powered agentic chunking.
+
+    The system will:
+    1. Read the text file
+    2. Use AgenticChunker to intelligently split content
+    3. Extract question-answer pairs using LLM
+    4. Create flashcards with embeddings
+    5. Store in a new deck
+
+    Args:
+        file: The .txt file to process
+        deck_name: Name for the new deck
+
+    Returns:
+        List of created flashcards
+    """
+    try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(".txt"):
+            raise HTTPException(status_code=400, detail="Only .txt files are supported")
+
+        # Validate deck name
+        if not deck_name or not deck_name.strip():
+            raise HTTPException(status_code=400, detail="deck_name is required")
+
+        print(f"Processing text file: {file.filename} for deck: {deck_name}")
+
+        # Read file contents
+        file_content = await file.read()
+
+        if not file_content:
+            raise HTTPException(status_code=400, detail="File is empty")
+
+        # Process the file using agentic chunker
+        flash_cards = await process_text_file_to_flashcards(
+            db=db,
+            file_content=file_content,
+            deck_name=deck_name.strip(),
+            user_id=str(user.id),
+        )
+
+        print(f"Successfully created {len(flash_cards)} flashcards from text file")
+
+        return {
+            "message": f"Successfully created {len(flash_cards)} flashcards",
+            "deck_name": deck_name,
+            "flashcard_count": len(flash_cards),
+            "flashcards": [
+                {
+                    "id": str(card.id),
+                    "question": card.question,
+                    "answer": card.answer,
+                    "deck_id": card.deck_id,
+                }
+                for card in flash_cards
+            ],
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except DBAPIError as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
+    except Exception as e:
+        print(f"Unexpected error processing text file: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process text file: {str(e)}"
+        )
+
+
+# Add this endpoint (place it before /deck/{deck_id}/cards to avoid route conflicts)
+@router.get("/decks", response_model=List[DeckRead])
+async def get_user_deck_list(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Get all decks for the current user.
+
+    Returns:
+        List of decks owned by the user
+    """
+    decks = await get_user_decks(db, user_id=str(user.id))
+    return decks
+
+
+@router.get("/deck/{deck_id}/cards", response_model=List[FlashcardBase])
+async def get_cards_by_deck_id(
+    deck_id: int,  # Changed from str to int
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Get all flashcards for a specific deck.
+    Only the deck owner can access their deck's cards.
+
+    Args:
+        deck_id: The integer ID of the deck
+
+    Returns:
+        List of flashcards in the deck
+
+    Raises:
+        HTTPException: 404 if deck not found or 403 if user doesn't own the deck
+    """
+    flashcards = await get_deck_cards(db, deck_id, user_id=str(user.id))
+
+    if flashcards is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Deck not found or you don't have permission to access it",
+        )
+
+    return flashcards
+
+
+@router.get("/{card_id}", response_model=FlashcardBase)
+async def get_flashcard_by_id(card_id: str, db: AsyncSession = Depends(get_db)):
+    db_flashcard = await get_flashcard(db, card_id)
+    if db_flashcard is None:
+        raise FlashcardNotFoundException()
+    return db_flashcard
+
+
+@router.delete("/{card_id}")
+async def delete_flashcard_by_id(card_id: str, db: AsyncSession = Depends(get_db)):
+    success = await delete_flashcard(db, card_id)
+    if not success:
+        raise FlashcardNotFoundException()
+    return {"ok": True}
+
+
+@router.put("/{card_id}", response_model=FlashcardBase)
+async def update_flashcard(
+    card_id: str, flashcard: FlashcardCreate, db: AsyncSession = Depends(get_db)
+):
+    db_flashcard = await update_card(db, card_id, flashcard)
+    if db_flashcard is None:
+        raise FlashcardNotFoundException()
+    return db_flashcard
+
+
+@router.get("/topic/{topic}", response_model=List[FlashcardBase])
+async def search_flashcards_by_topic(
+    topic: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Search for flashcards by topic using AI-powered semantic search.
+    Only searches within flashcards from the current user's decks.
+
+    Args:
+        topic: The search query (e.g., "photosynthesis", "World War 2")
+
+    Returns:
+        List of up to 5 most relevant flashcards
+    """
+    flash_cards = await search_flashcard(db=db, topic=topic, user_id=str(user.id))
+    return flash_cards

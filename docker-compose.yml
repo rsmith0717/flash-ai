@@ -1,0 +1,93 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: postgres-pgvector
+    ports:
+      - "5433:5432"
+    env_file:
+      - db.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql # Add this line
+    networks:
+      - app-network
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    env_file:
+      - ollama.env
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - APP_CHAT_MODEL=llama3.2:3b-instruct-q4_K_M
+      - APP_EMBEDDING_MODEL=nomic-embed-text:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    entrypoint: []
+    command:
+      [
+        "sh",
+        "-c",
+        "ollama serve & sleep 5 && (ollama pull $$APP_CHAT_MODEL || echo 'Failed to pull chat model') && (ollama pull $$APP_EMBEDDING_MODEL || echo 'Failed to pull embedding model') && wait",
+      ]
+    # command:
+    #   [
+    #     "sh",
+    #     "-c",
+    #     "ollama serve & sleep 5 && (ollama pull ${APP_CHAT_MODEL} || echo 'Failed to pull chat model') && (ollama pull ${APP_EMBEDDING_MODEL} || echo 'Failed to pull embedding model') && wait",
+    #   ]
+    restart: no
+    networks:
+      - app-network
+
+  backend:
+    build:
+      # context: ./app
+      dockerfile: Dockerfile.app
+    ports:
+      - "8000:8000"
+    env_file:
+      - api.env
+    depends_on:
+      - db
+      - ollama
+    volumes:
+      - .:/app
+      # Overmount the 'node_modules' subdirectory with an anonymous volume
+      - /app/.venv
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      # context: ./frontend
+      dockerfile: Dockerfile.fe
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Prevents host node_modules from overwriting container's
+    environment:
+      # Assuming you configure your TanStack app to use this URL for the backend
+      VITE_BACKEND_URL: http://backend:8000
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  app-network:
+    driver: bridge
