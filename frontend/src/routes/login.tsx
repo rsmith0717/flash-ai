@@ -13,7 +13,7 @@ function LoginPage() {
 	const { login, isLoading, error } = useAuth();
 	const navigate = useNavigate();
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
 		e.preventDefault();
 
 		try {
@@ -25,7 +25,7 @@ function LoginPage() {
 	};
 
 	return (
-		<div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+		<div className="flex items-center justify-center min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
 			<div className="w-full max-w-md">
 				<div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 shadow-xl">
 					{/* Header */}
@@ -40,7 +40,7 @@ function LoginPage() {
 					{/* Error Message */}
 					{error && (
 						<div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center gap-3">
-							<AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+							<AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
 							<p className="text-red-400 text-sm">{error}</p>
 						</div>
 					)}

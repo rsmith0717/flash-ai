@@ -1,6 +1,7 @@
+import json
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,10 +72,20 @@ async def generate_new_deck(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    """
+    Create a new deck from JSON data submitted in the request body.
+
+    Expected format:
+    {
+        "deck_name": "My Deck",
+        "flashcards": [
+            {"question": "Q1", "answer": "A1"},
+            {"question": "Q2", "answer": "A2"}
+        ]
+    }
+    """
     try:
         print("The deck is : ", deck)
-        # deck_model = await create_deck(db=db, name=deck.deck_name, user_id=str(user.id))
-        # print("The deck model is: ", deck_model)
         flash_card_list = [flashcard.model_dump() for flashcard in deck.flashcards]
         print("The deck flashcards are: ", flash_card_list)
         flash_cards = await embed_and_store_flashcards(
@@ -83,10 +94,58 @@ async def generate_new_deck(
         return flash_cards
     except DBAPIError as e:
         print(e)
-        if "invalid input value for enum" in str(e):
-            raise InvalidPayScheduleException()
-        else:
-            raise
+        raise
+
+
+@router.post("/deck/upload")
+async def upload_deck_from_file(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Create a new deck from a JSON file upload.
+
+    Expected file format:
+    {
+        "deck_name": "My Deck",
+        "flashcards": [
+            {"question": "Q1", "answer": "A1"},
+            {"question": "Q2", "answer": "A2"}
+        ]
+    }
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith(".json"):
+            raise ValueError("Only JSON files are supported")
+
+        # Read and parse the uploaded file
+        contents = await file.read()
+        deck_data = json.loads(contents.decode("utf-8"))
+
+        # Extract deck name and flashcards from the uploaded data
+        deck_name = deck_data.get("deck_name")
+        flashcards = deck_data.get("flashcards", [])
+
+        if not deck_name:
+            raise ValueError("deck_name is required in the JSON file")
+
+        if not flashcards:
+            raise ValueError("flashcards list is required in the JSON file")
+
+        print(f"Uploaded deck: {deck_name} with {len(flashcards)} flashcards")
+
+        # Use the same shared function as the JSON endpoint
+        flash_cards = await embed_and_store_flashcards(
+            db, deck_name, flashcards, user_id=str(user.id)
+        )
+        return flash_cards
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON file: {str(e)}")
+    except ValueError:
+        # Re-raise validation errors
+        raise
 
 
 @router.get("/{card_id}", response_model=FlashcardBase)
@@ -109,10 +168,10 @@ async def delete_flashcard_by_id(card_id: str, db: AsyncSession = Depends(get_db
 async def update_flashcard(
     card_id: str, flashcard: FlashcardCreate, db: AsyncSession = Depends(get_db)
 ):
-    updated = await update_card(db=db, card_id=card_id, flashcard=flashcard)
-    if updated is None:
+    db_flashcard = await update_card(db, card_id, flashcard)
+    if db_flashcard is None:
         raise PayrollNotFoundException()
-    return updated
+    return db_flashcard
 
 
 @router.get("/topic/{topic}", response_model=List[FlashcardBase])
