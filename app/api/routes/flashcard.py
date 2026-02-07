@@ -1,7 +1,7 @@
 import json
 from typing import List
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -117,22 +117,30 @@ async def upload_deck_from_file(
     """
     try:
         # Validate file type
-        if not file.filename.endswith(".json"):
-            raise ValueError("Only JSON files are supported")
+        if not file.filename or not file.filename.endswith(".json"):
+            raise HTTPException(status_code=400, detail="Only JSON files are supported")
 
         # Read and parse the uploaded file
         contents = await file.read()
-        deck_data = json.loads(contents.decode("utf-8"))
+
+        try:
+            deck_data = json.loads(contents.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON file: {str(e)}")
 
         # Extract deck name and flashcards from the uploaded data
         deck_name = deck_data.get("deck_name")
         flashcards = deck_data.get("flashcards", [])
 
         if not deck_name:
-            raise ValueError("deck_name is required in the JSON file")
+            raise HTTPException(
+                status_code=400, detail="deck_name is required in the JSON file"
+            )
 
         if not flashcards:
-            raise ValueError("flashcards list is required in the JSON file")
+            raise HTTPException(
+                status_code=400, detail="flashcards list is required in the JSON file"
+            )
 
         print(f"Uploaded deck: {deck_name} with {len(flashcards)} flashcards")
 
@@ -141,11 +149,12 @@ async def upload_deck_from_file(
             db, deck_name, flashcards, user_id=str(user.id)
         )
         return flash_cards
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON file: {str(e)}")
-    except ValueError:
-        # Re-raise validation errors
-        raise
+    except DBAPIError as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{card_id}", response_model=FlashcardBase)
@@ -175,6 +184,20 @@ async def update_flashcard(
 
 
 @router.get("/topic/{topic}", response_model=List[FlashcardBase])
-async def search_flashcards_by_topic(topic: str, db: AsyncSession = Depends(get_db)):
-    flash_cards = await search_flashcard(db=db, topic=topic)
+async def search_flashcards_by_topic(
+    topic: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Search for flashcards by topic using AI-powered semantic search.
+    Only searches within flashcards from the current user's decks.
+
+    Args:
+        topic: The search query (e.g., "photosynthesis", "World War 2")
+
+    Returns:
+        List of up to 5 most relevant flashcards
+    """
+    flash_cards = await search_flashcard(db=db, topic=topic, user_id=str(user.id))
     return flash_cards

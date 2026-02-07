@@ -39,13 +39,28 @@ async def get_flashcard(
 async def search_flashcard(
     db: AsyncSession,
     topic: str,
-) -> FlashCard | None:
+    user_id: str,
+) -> list[FlashCard]:
+    """
+    Search for flashcards by topic using semantic search.
+    Only returns flashcards from decks owned by the specified user.
+
+    Args:
+        db: Database session
+        topic: Search query text
+        user_id: ID of the user to filter decks by
+
+    Returns:
+        List of FlashCard objects ordered by relevance
+    """
     # 1. Define the search expression
-    # We use the <=> operator for cosine distance
     query_embedding = ollama_embedding.embed_query(text=topic)
 
+    # 2. Construct the query with JOIN to Deck table to filter by user_id
     search_query = (
         select(FlashCard)
+        .join(Deck, FlashCard.deck_id == Deck.id)
+        .where(Deck.user_id == user_id)
         .order_by(
             # The cosine_distance method translates to the <=> operator
             FlashCard.embedding.cosine_distance(query_embedding)
@@ -53,15 +68,7 @@ async def search_flashcard(
         .limit(5)
     )
 
-    # search_expression = FlashCard.embedding <=> query_embedding
-
-    # 2. Construct the query
-    # Select the item and the calculated distance (aliased as 'distance')
-    # Order by distance (ascending for most similar) and limit results
-    # search_query = select(FlashCard, search_expression.label("distance")).order_by(search_expression).limit(5)
-
     result = await db.execute(search_query)
-
     flash_cards = result.scalars().all()
     return flash_cards
 

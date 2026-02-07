@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useMutation } from '@tanstack/react-query';
 import { FileJson, Upload, AlertCircle, CheckCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
@@ -7,56 +8,97 @@ export const Route = createFileRoute('/upload-json')({
   component: JsonUploadPage,
 })
 
+interface UploadDeckResponse {
+  id: string
+  deck_name: string
+  flashcards: Array<{
+    id: string
+    question: string
+    answer: string
+  }>
+}
+
+async function uploadDeckFile(file: File): Promise<UploadDeckResponse> {
+  // Get the access token from localStorage
+  const token = localStorage.getItem('token')
+  
+  if (!token) {
+    throw new Error('No authentication token found. Please log in.')
+  }
+
+  // Create FormData and append the file
+  const formData = new FormData()
+  formData.append('file', file)
+
+  // Send to the backend using the upload endpoint
+  const response = await fetch('http://localhost:8000/cards/deck/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+    credentials: 'include',
+  })
+
+  // Handle response
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }))
+    throw new Error(errorData.detail || `Server error: ${response.status}`)
+  }
+
+  return response.json()
+}
+
 function JsonUploadPage() {
   const [file, setFile] = useState<File | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
   const { user } = useAuth()
   const navigate = useNavigate()
+
+  const uploadMutation = useMutation({
+    mutationFn: uploadDeckFile,
+    onSuccess: (data) => {
+      console.log('Upload successful:', data)
+      // Navigate after a short delay to show success message
+      setTimeout(() => navigate({ to: '/' }), 2000)
+    },
+    onError: (error: Error) => {
+      console.error('Upload error:', error)
+    },
+  })
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       if (!selectedFile.name.endsWith('.json')) {
-        setError('Please select a JSON file')
+        // Clear any previous file and show error
+        setFile(null)
         return
       }
       setFile(selectedFile)
-      setError(null)
-      setSuccess(false)
+      // Reset mutation state when selecting a new file
+      uploadMutation.reset()
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!file || !user) return
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await fetch('http://localhost:8000/cards/deck/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to upload deck')
-      }
-
-      setSuccess(true)
-      setTimeout(() => navigate({ to: '/' }), 2000)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
-      setIsLoading(false)
+    
+    // Check if user is logged in
+    if (!user) {
+      return
     }
+
+    if (!file) {
+      return
+    }
+
+    // Trigger the mutation
+    uploadMutation.mutate(file)
   }
+
+  const isLoading = uploadMutation.isPending
+  const error = uploadMutation.error?.message || null
+  const success = uploadMutation.isSuccess
 
   return (
     <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 py-16 px-4">
@@ -77,6 +119,14 @@ function JsonUploadPage() {
                 Upload a JSON file with flashcard questions and answers
               </p>
             </div>
+
+            {/* Not Logged In Warning */}
+            {!user && (
+              <div className="alert alert-warning mb-4">
+                <AlertCircle className="w-5 h-5" />
+                <span>Please log in to upload flashcards</span>
+              </div>
+            )}
 
             {/* Error Alert */}
             {error && (
@@ -105,7 +155,7 @@ function JsonUploadPage() {
                   accept=".json"
                   onChange={handleFileChange}
                   className="file-input file-input-bordered file-input-primary w-full"
-                  disabled={isLoading}
+                  disabled={isLoading || !user}
                 />
                 <label className="label">
                   <span className="label-text-alt">
@@ -114,6 +164,25 @@ function JsonUploadPage() {
                   </span>
                 </label>
               </div>
+
+              {file && !success && (
+                <div className="alert alert-info">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    className="stroke-current shrink-0 w-6 h-6"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>Selected: {file.name}</span>
+                </div>
+              )}
 
               <div className="card-actions justify-end">
                 <button
@@ -127,7 +196,7 @@ function JsonUploadPage() {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={!file || isLoading}
+                  disabled={!file || isLoading || !user}
                 >
                   {isLoading ? (
                     <>
