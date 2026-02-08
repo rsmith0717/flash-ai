@@ -18,7 +18,7 @@ interface UploadDeckResponse {
 }
 
 async function uploadDeckFile(file: File): Promise<UploadDeckResponse> {
-  const token = localStorage.getItem('access_token')
+  const token = localStorage.getItem('token')
   
   if (!token) {
     throw new Error('No authentication token found. Please log in.')

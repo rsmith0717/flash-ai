@@ -1,12 +1,21 @@
 from langchain_community.embeddings import OllamaEmbeddings
+from langchain_ollama import ChatOllama
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.flashcard import Deck, FlashCard
 from app.schemas.flashcard import FlashcardCreate
+from app.services.chunker import AgenticChunker
 
 ollama_embedding = OllamaEmbeddings(
     model="nomic-embed-text", base_url="http://ollama:11434"
+)
+
+# Initialize ChatOllama for the agentic chunker
+ollama_chat = ChatOllama(
+    model="llama3.2:3b",  # The model we're using (we installed llama3.2:3b)
+    temperature=0.2,  # Temp goes from 0-1. Higher temp = more creativity
+    base_url="http://ollama:11434",
 )
 
 
@@ -159,3 +168,62 @@ async def embed_and_store_flashcards(
     await db.commit()
     print(f"Stored {len(db_objects)} flashcards with embeddings.")
     return db_objects
+
+
+async def process_text_file_to_flashcards(
+    db: AsyncSession, file_content: bytes, deck_name: str, user_id: str
+) -> list[FlashCard]:
+    """
+    Process a text file using AgenticChunker to extract QA pairs and create flashcards.
+
+    Args:
+        db: Database session
+        file_content: Raw bytes from the uploaded .txt file
+        deck_name: Name for the new deck
+        user_id: ID of the user creating the flashcards
+
+    Returns:
+        List of created FlashCard objects
+    """
+    try:
+        # Decode file content
+        text_content = file_content.decode("utf-8")
+
+        print(f"Processing text file with {len(text_content)} characters")
+
+        # Initialize the agentic chunker with ChatOllama
+        chunker = AgenticChunker(model=ollama_chat)
+
+        # Process the text and extract QA pairs
+        chunks = chunker.chunk_text(text_content)
+
+        print(f"Generated {len(chunks)} chunks from text")
+
+        # Extract all QA pairs from chunks
+        all_qa_pairs = chunker.get_all_qa_pairs(chunks)
+
+        print(f"Extracted {len(all_qa_pairs)} QA pairs")
+
+        if not all_qa_pairs:
+            raise ValueError(
+                "No question-answer pairs could be extracted from the text"
+            )
+
+        # Convert QA pairs to the format expected by embed_and_store_flashcards
+        flashcards = [
+            {"question": qa["question"], "answer": qa["answer"]} for qa in all_qa_pairs
+        ]
+
+        # Use existing function to embed and store flashcards
+        db_flashcards = await embed_and_store_flashcards(
+            db=db, deck_name=deck_name, flashcards=flashcards, user_id=user_id
+        )
+
+        return db_flashcards
+
+    except UnicodeDecodeError as e:
+        raise ValueError(
+            f"Failed to decode text file. Please ensure it's a valid UTF-8 text file: {str(e)}"
+        )
+    except Exception as e:
+        raise ValueError(f"Failed to process text file: {str(e)}")

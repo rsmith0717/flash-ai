@@ -24,6 +24,7 @@ from app.services.flashcard import (
     delete_flashcard,
     embed_and_store_flashcards,
     get_flashcard,
+    process_text_file_to_flashcards,
     search_flashcard,
     update_card,
 )
@@ -152,9 +153,91 @@ async def upload_deck_from_file(
     except DBAPIError as e:
         print(f"Database error: {e}")
         raise HTTPException(status_code=500, detail="Database error occurred")
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/deck/upload/text")
+async def upload_text_file_for_flashcards(
+    file: UploadFile = File(...),
+    deck_name: str = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Create flashcards from a text file using AI-powered agentic chunking.
+
+    The system will:
+    1. Read the text file
+    2. Use AgenticChunker to intelligently split content
+    3. Extract question-answer pairs using LLM
+    4. Create flashcards with embeddings
+    5. Store in a new deck
+
+    Args:
+        file: The .txt file to process
+        deck_name: Name for the new deck
+
+    Returns:
+        List of created flashcards
+    """
+    try:
+        # Validate file type
+        if not file.filename or not file.filename.endswith(".txt"):
+            raise HTTPException(status_code=400, detail="Only .txt files are supported")
+
+        # Validate deck name
+        if not deck_name or not deck_name.strip():
+            raise HTTPException(status_code=400, detail="deck_name is required")
+
+        print(f"Processing text file: {file.filename} for deck: {deck_name}")
+
+        # Read file contents
+        file_content = await file.read()
+
+        if not file_content:
+            raise HTTPException(status_code=400, detail="File is empty")
+
+        # Process the file using agentic chunker
+        flash_cards = await process_text_file_to_flashcards(
+            db=db,
+            file_content=file_content,
+            deck_name=deck_name.strip(),
+            user_id=str(user.id),
+        )
+
+        print(f"Successfully created {len(flash_cards)} flashcards from text file")
+
+        return {
+            "message": f"Successfully created {len(flash_cards)} flashcards",
+            "deck_name": deck_name,
+            "flashcard_count": len(flash_cards),
+            "flashcards": [
+                {
+                    "id": str(card.id),
+                    "question": card.question,
+                    "answer": card.answer,
+                    "deck_id": card.deck_id,
+                }
+                for card in flash_cards
+            ],
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except DBAPIError as e:
+        print(f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Database error occurred")
+    except Exception as e:
+        print(f"Unexpected error processing text file: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process text file: {str(e)}"
+        )
 
 
 @router.get("/{card_id}", response_model=FlashcardBase)

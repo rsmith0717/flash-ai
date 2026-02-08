@@ -87,6 +87,7 @@ class AgenticChunker:
         Return JSON:"""
 
         try:
+            print("The model is: ", self.model)
             response = self.model.invoke(prompt)
 
             # Extract JSON from response
@@ -120,8 +121,10 @@ class AgenticChunker:
             print(f"Response was: {content}")
             return []
         except Exception as e:
+            # print(e)
             print(f"Error extracting QA pairs: {e}")
-            return []
+            raise e
+            # return []
 
     def should_merge_chunks(self, chunk1: Dict, chunk2: Dict) -> Tuple[bool, str]:
         """

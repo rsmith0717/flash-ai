@@ -7,7 +7,7 @@ export const Route = createFileRoute('/upload-text')({
 })
 
 async function uploadTextFile(file: File, deckName: string): Promise<void> {
-  const token = localStorage.getItem('access_token')
+  const token = localStorage.getItem('token')
   
   if (!token) {
     throw new Error('No authentication token found. Please log in.')
