@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query';
 import { FileJson, Upload, AlertCircle, CheckCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import { useMutation } from '@tanstack/react-query'
 
 export const Route = createFileRoute('/upload-json')({
   component: JsonUploadPage,
@@ -19,18 +19,15 @@ interface UploadDeckResponse {
 }
 
 async function uploadDeckFile(file: File): Promise<UploadDeckResponse> {
-  // Get the access token from localStorage
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('access_token')
   
   if (!token) {
     throw new Error('No authentication token found. Please log in.')
   }
 
-  // Create FormData and append the file
   const formData = new FormData()
   formData.append('file', file)
 
-  // Send to the backend using the upload endpoint
   const response = await fetch('http://localhost:8000/cards/deck/upload', {
     method: 'POST',
     headers: {
@@ -40,7 +37,6 @@ async function uploadDeckFile(file: File): Promise<UploadDeckResponse> {
     credentials: 'include',
   })
 
-  // Handle response
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }))
     throw new Error(errorData.detail || `Server error: ${response.status}`)
@@ -58,7 +54,6 @@ function JsonUploadPage() {
     mutationFn: uploadDeckFile,
     onSuccess: (data) => {
       console.log('Upload successful:', data)
-      // Navigate after a short delay to show success message
       setTimeout(() => navigate({ to: '/' }), 2000)
     },
     onError: (error: Error) => {
@@ -70,12 +65,10 @@ function JsonUploadPage() {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       if (!selectedFile.name.endsWith('.json')) {
-        // Clear any previous file and show error
         setFile(null)
         return
       }
       setFile(selectedFile)
-      // Reset mutation state when selecting a new file
       uploadMutation.reset()
     }
   }
@@ -83,7 +76,6 @@ function JsonUploadPage() {
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    // Check if user is logged in
     if (!user) {
       return
     }
@@ -92,7 +84,6 @@ function JsonUploadPage() {
       return
     }
 
-    // Trigger the mutation
     uploadMutation.mutate(file)
   }
 
@@ -101,14 +92,14 @@ function JsonUploadPage() {
   const success = uploadMutation.isSuccess
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 py-16 px-4">
+    <div className="min-h-screen bg-base-100 py-16 px-4">
       <div className="container mx-auto max-w-2xl">
-        <div className="card bg-base-200 border-2 border-cyan-500/20 shadow-xl">
+        <div className="card bg-base-200 shadow-xl">
           <div className="card-body">
             {/* Header */}
             <div className="text-center mb-6">
               <div className="avatar placeholder mb-4">
-                <div className="bg-linear-to-br from-cyan-500 to-blue-500 text-white w-16 rounded-full">
+                <div className="bg-linear-to-br from-primary to-secondary text-primary-content w-16 rounded-full">
                   <FileJson className="w-8 h-8" />
                 </div>
               </div>

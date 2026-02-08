@@ -25,110 +25,104 @@ function LoginPage() {
 	};
 
 	return (
-		<div className="flex items-center justify-center min-h-screen bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+		<div className="flex items-center justify-center min-h-screen bg-base-100 p-4">
 			<div className="w-full max-w-md">
-				<div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl p-8 shadow-xl">
-					{/* Header */}
-					<div className="text-center mb-8">
-						<div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-500/20 rounded-full mb-4">
-							<LogIn className="w-8 h-8 text-cyan-400" />
+				<div className="card bg-base-200 shadow-xl border border-base-300">
+					<div className="card-body items-center">
+						{/* Header */}
+						<div className="text-center mb-6">
+							<div className="avatar placeholder mb-4">
+								<div className="bg-gradient-to-br from-primary to-accent text-primary-content w-16 rounded-full">
+									<LogIn className="w-8 h-8" />
+								</div>
+							</div>
+							<h1 className="text-2xl font-bold text-base-content">Welcome Back</h1>
+							<p className="text-base-content/70 mt-2">Sign in to your account</p>
 						</div>
-						<h1 className="text-2xl font-bold text-white">Welcome Back</h1>
-						<p className="text-gray-400 mt-2">Sign in to your account</p>
-					</div>
 
-					{/* Error Message */}
-					{error && (
-						<div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-center gap-3">
-							<AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-							<p className="text-red-400 text-sm">{error}</p>
-						</div>
-					)}
+						{/* Error Message */}
+						{error && (
+							<div className="alert alert-error mb-6 w-full">
+								<AlertCircle className="w-5 h-5" />
+								<span className="text-sm">{error}</span>
+							</div>
+						)}
 
-					{/* Login Form */}
-					<form onSubmit={handleSubmit} className="space-y-6">
-						<div>
-							<label
-								htmlFor="email"
-								className="block text-sm font-medium text-gray-300 mb-2"
+						{/* Login Form */}
+						<form onSubmit={handleSubmit} className="space-y-4 w-full">
+							<div className="form-control w-full">
+								<label htmlFor="email" className="label">
+									<span className="label-text">Email Address</span>
+								</label>
+								<label className="input input-bordered flex items-center gap-2 w-full">
+									<Mail className="w-4 h-4 opacity-70" />
+									<input
+										id="email"
+										type="email"
+										value={email}
+										onChange={(e) => setEmail(e.target.value)}
+										placeholder="you@example.com"
+										required
+										className="grow"
+									/>
+								</label>
+							</div>
+
+							<div className="form-control w-full">
+								<label htmlFor="password" className="label">
+									<span className="label-text">Password</span>
+								</label>
+								<label className="input input-bordered flex items-center gap-2 w-full">
+									<Lock className="w-4 h-4 opacity-70" />
+									<input
+										id="password"
+										type="password"
+										value={password}
+										onChange={(e) => setPassword(e.target.value)}
+										placeholder="••••••••"
+										required
+										className="grow"
+									/>
+								</label>
+							</div>
+
+							<button
+								type="submit"
+								disabled={isLoading}
+								className="btn btn-primary w-full"
 							>
-								Email Address
-							</label>
-							<div className="relative">
-								<Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-								<input
-									id="email"
-									type="email"
-									value={email}
-									onChange={(e) => setEmail(e.target.value)}
-									placeholder="you@example.com"
-									required
-									className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+								{isLoading ? (
+									<>
+										<span className="loading loading-spinner loading-sm"></span>
+										Signing in...
+									</>
+								) : (
+									"Sign In"
+								)}
+							</button>
+						</form>
+
+						{/* Test Credentials Hint */}
+						<div className="alert alert-info mt-6 w-full">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								className="stroke-current shrink-0 w-6 h-6"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 								/>
+							</svg>
+							<div className="text-sm">
+								<span className="font-medium">Test credentials:</span>
+								<br />
+								<span className="font-mono">tester@test.com / testpass</span>
 							</div>
 						</div>
-
-						<div>
-							<label
-								htmlFor="password"
-								className="block text-sm font-medium text-gray-300 mb-2"
-							>
-								Password
-							</label>
-							<div className="relative">
-								<Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-								<input
-									id="password"
-									type="password"
-									value={password}
-									onChange={(e) => setPassword(e.target.value)}
-									placeholder="••••••••"
-									required
-									className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-								/>
-							</div>
-						</div>
-
-						<button
-							type="submit"
-							disabled={isLoading}
-							className="w-full py-3 px-4 bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-500/50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/25"
-						>
-							{isLoading ? (
-								<span className="flex items-center justify-center gap-2">
-									<svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-										<circle
-											className="opacity-25"
-											cx="12"
-											cy="12"
-											r="10"
-											stroke="currentColor"
-											strokeWidth="4"
-											fill="none"
-										/>
-										<path
-											className="opacity-75"
-											fill="currentColor"
-											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-										/>
-									</svg>
-									Signing in...
-								</span>
-							) : (
-								"Sign In"
-							)}
-						</button>
-					</form>
-
-					{/* Test Credentials Hint */}
-					<div className="mt-6 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
-						<p className="text-sm text-gray-400 text-center">
-							<span className="text-cyan-400 font-medium">
-								Test credentials:
-							</span>
-							<br />
-							tester@test.com / testpass
-						</p>
 					</div>
 				</div>
 			</div>

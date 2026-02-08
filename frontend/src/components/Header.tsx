@@ -12,40 +12,37 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function Header() {
 	const [isOpen, setIsOpen] = useState(false);
-	const [groupedExpanded, setGroupedExpanded] = useState<
-		Record<string, boolean>
-	>({});
 	const { user, logout } = useAuth();
 
 	return (
 		<>
-			<header className="p-4 flex items-center justify-between bg-gray-800 text-white shadow-lg">
-				<div className="flex items-center">
+			<header className="navbar bg-base-200 shadow-lg border-b border-base-300">
+				<div className="navbar-start">
 					<button
 						onClick={() => setIsOpen(true)}
-						className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+						className="btn btn-ghost btn-circle"
 						aria-label="Open menu"
 					>
 						<Menu size={24} />
 					</button>
-					<h1 className="ml-4 text-xl font-semibold">
-						<Link to="/">
-							<span className="font-bold">Flash AI</span>
-						</Link>
-					</h1>
+					<Link to="/" className="btn btn-ghost text-xl font-bold normal-case">
+						<span className="bg-linear-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+							Flash AI
+						</span>
+					</Link>
 				</div>
 
-				{/* Auth Button */}
-				<div className="flex items-center">
+				{/* Auth Section */}
+				<div className="navbar-end">
 					{user ? (
 						<div className="flex items-center gap-3">
-							<span className="hidden sm:flex items-center gap-2 text-gray-300 text-sm">
+							<span className="hidden sm:flex items-center gap-2 text-base-content/70 text-sm">
 								<User size={16} />
 								{user.email}
 							</span>
 							<button
 								onClick={logout}
-								className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white text-sm transition-colors"
+								className="btn btn-ghost btn-sm gap-2"
 							>
 								<LogOut size={16} />
 								<span className="hidden sm:inline">Logout</span>
@@ -54,7 +51,7 @@ export default function Header() {
 					) : (
 						<Link
 							to="/login"
-							className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white text-sm font-medium transition-colors shadow-lg shadow-cyan-500/25"
+							className="btn btn-primary btn-sm gap-2"
 						>
 							<LogIn size={16} />
 							<span className="hidden sm:inline">Login</span>
@@ -63,16 +60,18 @@ export default function Header() {
 				</div>
 			</header>
 
+			{/* Sidebar Drawer */}
 			<aside
-				className={`fixed top-0 left-0 h-full w-80 bg-gray-900 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+				className={`fixed top-0 left-0 h-full w-80 bg-base-200 border-r border-base-300 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
 					isOpen ? "translate-x-0" : "-translate-x-full"
 				}`}
 			>
-				<div className="flex items-center justify-between p-4 border-b border-gray-700">
-					<h2 className="text-xl font-bold">Navigation</h2>
+				{/* Sidebar Header */}
+				<div className="flex items-center justify-between p-4 border-b border-base-300">
+					<h2 className="text-xl font-bold text-base-content">Navigation</h2>
 					<button
 						onClick={() => setIsOpen(false)}
-						className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+						className="btn btn-ghost btn-sm btn-circle"
 						aria-label="Close menu"
 					>
 						<X size={24} />
@@ -81,47 +80,51 @@ export default function Header() {
 
 				{/* User Info in Sidebar (when logged in) */}
 				{user && (
-					<div className="p-4 border-b border-gray-700 bg-gray-800/50">
+					<div className="p-4 border-b border-base-300 bg-base-300/50">
 						<div className="flex items-center gap-3">
-							<div className="w-10 h-10 bg-cyan-500 rounded-full flex items-center justify-center">
-								<User size={20} />
+							<div className="avatar placeholder">
+								<div className="bg-accent text-accent-content w-10 rounded-full">
+									<User size={20} />
+								</div>
 							</div>
 							<div className="flex-1 min-w-0">
-								<p className="text-sm font-medium text-white truncate">
+								<p className="text-sm font-medium text-base-content truncate">
 									{user.email}
 								</p>
-								<p className="text-xs text-gray-400">Logged in</p>
+								<p className="text-xs text-base-content/50">Logged in</p>
 							</div>
 						</div>
 					</div>
 				)}
 
+				{/* Navigation Links */}
 				<nav className="flex-1 p-4 overflow-y-auto">
-					<Link
-						to="/"
-						onClick={() => setIsOpen(false)}
-						className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors mb-2"
-						activeProps={{
-							className:
-								"flex items-center gap-3 p-3 rounded-lg bg-cyan-600 hover:bg-cyan-700 transition-colors mb-2",
-						}}
-					>
-						<Home size={20} />
-						<span className="font-medium">Home</span>
-					</Link>
-
-					
+					<ul className="menu menu-lg">
+						<li>
+							<Link
+								to="/"
+								onClick={() => setIsOpen(false)}
+								className="gap-3"
+								activeProps={{
+									className: "active bg-primary text-primary-content gap-3",
+								}}
+							>
+								<Home size={20} />
+								<span className="font-medium">Home</span>
+							</Link>
+						</li>
+					</ul>
 				</nav>
 
 				{/* Sidebar Footer with Login/Logout */}
-				<div className="p-4 border-t border-gray-700">
+				<div className="p-4 border-t border-base-300">
 					{user ? (
 						<button
 							onClick={() => {
 								logout();
 								setIsOpen(false);
 							}}
-							className="w-full flex items-center justify-center gap-2 p-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+							className="btn btn-ghost w-full gap-2"
 						>
 							<LogOut size={20} />
 							<span className="font-medium">Logout</span>
@@ -130,7 +133,7 @@ export default function Header() {
 						<Link
 							to="/login"
 							onClick={() => setIsOpen(false)}
-							className="w-full flex items-center justify-center gap-2 p-3 bg-cyan-500 hover:bg-cyan-600 rounded-lg text-white transition-colors"
+							className="btn btn-primary w-full gap-2"
 						>
 							<LogIn size={20} />
 							<span className="font-medium">Login</span>

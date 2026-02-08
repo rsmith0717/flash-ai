@@ -16,7 +16,6 @@ interface Flashcard {
 }
 
 async function searchFlashcards(topic: string): Promise<Flashcard[]> {
-  // Get the access token from localStorage
   const token = localStorage.getItem('token')
   
   if (!token) {
@@ -46,38 +45,35 @@ function SearchFlashcardsPage() {
   const [searchTopic, setSearchTopic] = useState('')
   const { user } = useAuth()
 
-  // Use TanStack Query with enabled condition
-  const { data: flashcards = [], isLoading, error, refetch } = useQuery({
+  const { data: flashcards = [], isLoading, error } = useQuery({
     queryKey: ['flashcards', 'search', searchTopic],
     queryFn: () => searchFlashcards(searchTopic),
-    enabled: !!searchTopic && !!user, // Only run query if we have a search topic and user is logged in
+    enabled: !!searchTopic && !!user,
     retry: 1,
   })
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (!topic.trim()) return
-    
-    // Update the search topic which will trigger the query
     setSearchTopic(topic.trim())
   }
 
   const hasSearched = !!searchTopic
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 py-16 px-4">
+    <div className="min-h-screen bg-base-100 py-16 px-4">
       <div className="container mx-auto max-w-4xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="avatar placeholder mb-4">
-            <div className="bg-linear-to-br from-green-500 to-emerald-500 text-white w-16 rounded-full">
+            <div className="bg-accent text-accent-content w-16 rounded-full">
               <Search className="w-8 h-8" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="text-4xl font-bold text-base-content mb-2">
             Search Flashcards
           </h1>
-          <p className="text-gray-400">
+          <p className="text-base-content/70">
             Find relevant flashcards using AI-powered semantic search
           </p>
         </div>
@@ -91,7 +87,7 @@ function SearchFlashcardsPage() {
         )}
 
         {/* Search Form */}
-        <div className="card bg-base-200 border-2 border-green-500/20 shadow-xl mb-8">
+        <div className="card bg-base-200 shadow-xl mb-8">
           <div className="card-body">
             <form onSubmit={handleSearch} className="flex gap-2">
               <input
@@ -99,12 +95,12 @@ function SearchFlashcardsPage() {
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="Enter a topic or keyword..."
-                className="input input-bordered input-success flex-1"
+                className="input input-bordered input-accent flex-1"
                 disabled={isLoading || !user}
               />
               <button
                 type="submit"
-                className="btn btn-success"
+                className="btn btn-accent"
                 disabled={!topic.trim() || isLoading || !user}
               >
                 {isLoading ? (
@@ -116,7 +112,7 @@ function SearchFlashcardsPage() {
             </form>
             {hasSearched && (
               <div className="mt-2 text-sm text-base-content/70">
-                Searching for: <span className="font-semibold text-success">"{searchTopic}"</span>
+                Searching for: <span className="font-semibold text-accent">"{searchTopic}"</span>
               </div>
             )}
           </div>
@@ -133,7 +129,7 @@ function SearchFlashcardsPage() {
         {/* Results */}
         {hasSearched && !isLoading && !error && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-white mb-4">
+            <h2 className="text-2xl font-bold text-base-content mb-4">
               {flashcards.length > 0
                 ? `Found ${flashcards.length} flashcard${flashcards.length !== 1 ? 's' : ''}`
                 : 'No flashcards found'}
@@ -161,13 +157,13 @@ function SearchFlashcardsPage() {
             {flashcards.map((card, index) => (
               <div
                 key={card.id}
-                className="card bg-base-200 border border-green-500/20 hover:border-green-500/40 transition-all"
+                className="card bg-base-200 hover:bg-base-300 transition-all"
               >
                 <div className="card-body">
                   <div className="flex items-start gap-4">
-                    <div className="badge badge-success badge-lg">{index + 1}</div>
+                    <div className="badge badge-accent badge-lg">{index + 1}</div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white mb-2">
+                      <h3 className="text-lg font-semibold text-base-content mb-2">
                         {card.question}
                       </h3>
                       <div className="divider my-2"></div>
@@ -183,8 +179,8 @@ function SearchFlashcardsPage() {
         {/* Loading State */}
         {isLoading && (
           <div className="flex flex-col justify-center items-center py-16">
-            <Loader2 className="w-12 h-12 animate-spin text-green-500 mb-4" />
-            <p className="text-gray-400">Searching flashcards...</p>
+            <Loader2 className="w-12 h-12 animate-spin text-accent mb-4" />
+            <p className="text-base-content/70">Searching flashcards...</p>
           </div>
         )}
       </div>

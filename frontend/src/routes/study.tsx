@@ -66,18 +66,18 @@ function StudyChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="min-h-screen bg-base-100 flex flex-col">
       {/* Header */}
-      <div className="bg-base-200 border-b border-pink-500/20 py-6">
+      <div className="bg-base-200 border-b border-base-300 py-6">
         <div className="container mx-auto px-4">
           <div className="flex items-center gap-4">
             <div className="avatar placeholder">
-              <div className="bg-gradient-to-br from-pink-500 to-rose-500 text-white w-12 rounded-full">
+              <div className="bg-linear-to-br from-accent to-secondary text-accent-content w-12 rounded-full">
                 <Bot className="w-6 h-6" />
               </div>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">AI Study Assistant</h1>
+              <h1 className="text-2xl font-bold text-base-content">AI Study Assistant</h1>
               <p className="text-base-content/70">
                 Ask me anything about your flashcards
               </p>
@@ -87,12 +87,12 @@ function StudyChatPage() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto py-8">
+      <div className="flex-1 overflow-y-auto py-8 bg-base-100">
         <div className="container mx-auto px-4 max-w-4xl">
           {messages.length === 0 ? (
             <div className="text-center py-16">
-              <MessageSquare className="w-16 h-16 text-pink-500/50 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-white mb-2">
+              <MessageSquare className="w-16 h-16 text-accent/50 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-base-content mb-2">
                 Start a Conversation
               </h2>
               <p className="text-base-content/70">
@@ -109,12 +109,12 @@ function StudyChatPage() {
                   <div className="chat-image avatar">
                     <div className="w-10 rounded-full">
                       {message.role === 'user' ? (
-                        <div className="bg-cyan-500 w-full h-full flex items-center justify-center">
-                          <User className="w-5 h-5 text-white" />
+                        <div className="bg-primary w-full h-full flex items-center justify-center rounded-full">
+                          <User className="w-5 h-5 text-primary-content" />
                         </div>
                       ) : (
-                        <div className="bg-gradient-to-br from-pink-500 to-rose-500 w-full h-full flex items-center justify-center">
-                          <Bot className="w-5 h-5 text-white" />
+                        <div className="bg-linear-to-br from-accent to-secondary w-full h-full flex items-center justify-center rounded-full">
+                          <Bot className="w-5 h-5 text-accent-content" />
                         </div>
                       )}
                     </div>
@@ -134,8 +134,8 @@ function StudyChatPage() {
                 <div className="chat chat-start">
                   <div className="chat-image avatar">
                     <div className="w-10 rounded-full">
-                      <div className="bg-gradient-to-br from-pink-500 to-rose-500 w-full h-full flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-white" />
+                      <div className="bg-linear-to-br from-accent to-secondary w-full h-full flex items-center justify-center rounded-full">
+                        <Bot className="w-5 h-5 text-accent-content" />
                       </div>
                     </div>
                   </div>
@@ -151,7 +151,7 @@ function StudyChatPage() {
       </div>
 
       {/* Input Area */}
-      <div className="bg-base-200 border-t border-pink-500/20 py-4">
+      <div className="bg-base-200 border-t border-base-300 py-4">
         <div className="container mx-auto px-4 max-w-4xl">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input

@@ -12,54 +12,54 @@ export const Route = createFileRoute('/')({ component: App })
 
 function App() {
   const colorSchemes = {
-    cyan: {
-      gradient: 'bg-gradient-to-br from-cyan-500 to-blue-500',
-      iconBg: 'bg-cyan-500/20',
-      iconText: 'text-cyan-400',
-      border: 'hover:border-cyan-500',
-      shadow: 'hover:shadow-cyan-500/20',
+    pink: {
+      gradient: 'bg-gradient-to-br from-pink-500 to-purple-500',
+      iconBg: 'bg-primary/20',
+      iconText: 'text-primary',
+      border: 'hover:border-primary',
+      shadow: 'hover:shadow-primary/20',
       btnClass: 'btn-primary',
     },
     purple: {
       gradient: 'bg-gradient-to-br from-purple-500 to-pink-500',
-      iconBg: 'bg-purple-500/20',
-      iconText: 'text-purple-400',
-      border: 'hover:border-purple-500',
-      shadow: 'hover:shadow-purple-500/20',
+      iconBg: 'bg-secondary/20',
+      iconText: 'text-secondary',
+      border: 'hover:border-secondary',
+      shadow: 'hover:shadow-secondary/20',
       btnClass: 'btn-secondary',
+    },
+    cyan: {
+      gradient: 'bg-gradient-to-br from-cyan-500 to-blue-500',
+      iconBg: 'bg-accent/20',
+      iconText: 'text-accent',
+      border: 'hover:border-accent',
+      shadow: 'hover:shadow-accent/20',
+      btnClass: 'btn-accent',
     },
     green: {
       gradient: 'bg-gradient-to-br from-green-500 to-emerald-500',
-      iconBg: 'bg-green-500/20',
-      iconText: 'text-green-400',
-      border: 'hover:border-green-500',
-      shadow: 'hover:shadow-green-500/20',
+      iconBg: 'bg-success/20',
+      iconText: 'text-success',
+      border: 'hover:border-success',
+      shadow: 'hover:shadow-success/20',
       btnClass: 'btn-success',
-    },
-    pink: {
-      gradient: 'bg-gradient-to-br from-pink-500 to-rose-500',
-      iconBg: 'bg-pink-500/20',
-      iconText: 'text-pink-400',
-      border: 'hover:border-pink-500',
-      shadow: 'hover:shadow-pink-500/20',
-      btnClass: 'btn-accent',
     },
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-base-100">
       <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-16">
           <div className="avatar placeholder mb-6">
-            <div className="bg-linear-to-br from-cyan-500 to-purple-500 text-white w-20 rounded-full">
+            <div className="bg-gradient-to-br from-primary to-secondary text-primary-content w-20 rounded-full">
               <Sparkles className="w-10 h-10" />
             </div>
           </div>
-          <h1 className="text-5xl font-bold text-white mb-4 bg-linear-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text">
+          <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
             Flash AI
           </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+          <p className="text-xl text-base-content/70 max-w-2xl mx-auto">
             AI-powered flashcard learning platform with intelligent study features
           </p>
         </div>
@@ -71,7 +71,7 @@ function App() {
             icon={FileJson}
             title="Upload JSON Deck"
             description="Create a new flashcard deck by uploading a JSON file with questions and answers"
-            colorScheme={colorSchemes.cyan}
+            colorScheme={colorSchemes.pink}
           />
 
           <FeatureCard
@@ -95,14 +95,14 @@ function App() {
             icon={MessageSquare}
             title="AI Study Assistant"
             description="Chat with an AI tutor that helps you study using your flashcard content"
-            colorScheme={colorSchemes.pink}
+            colorScheme={colorSchemes.cyan}
           />
         </div>
 
         {/* Footer */}
         <div className="mt-16 text-center">
           <div className="divider"></div>
-          <p className="text-gray-500 text-sm">
+          <p className="text-base-content/50 text-sm">
             All features are powered by AI embeddings and semantic search
           </p>
         </div>

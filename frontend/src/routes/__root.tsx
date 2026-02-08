@@ -16,7 +16,7 @@ import appCss from '../styles.css?url'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 10, // 10 minutes
+      staleTime: 1000 * 60 * 10, // 5 minutes
       refetchOnWindowFocus: false,
     },
   },
@@ -40,7 +40,7 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dracula">
       <head>
         <HeadContent />
       </head>

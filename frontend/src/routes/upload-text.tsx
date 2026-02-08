@@ -62,14 +62,14 @@ function TextUploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-900 via-slate-800 to-slate-900 py-16 px-4">
+    <div className="min-h-screen bg-base-100 py-16 px-4">
       <div className="container mx-auto max-w-2xl">
-        <div className="card bg-base-200 border-2 border-purple-500/20 shadow-xl">
+        <div className="card bg-base-200 shadow-xl border border-base-300">
           <div className="card-body">
             {/* Header */}
             <div className="text-center mb-6">
               <div className="avatar placeholder mb-4">
-                <div className="bg-linear-to-br from-purple-500 to-pink-500 text-white w-16 rounded-full">
+                <div className="bg-linear-to-br from-secondary to-primary text-secondary-content w-16 rounded-full">
                   <FileText className="w-8 h-8" />
                 </div>
               </div>
@@ -80,6 +80,14 @@ function TextUploadPage() {
                 AI will process your document and create flashcards
               </p>
             </div>
+
+            {/* Not Logged In Warning */}
+            {!user && (
+              <div className="alert alert-warning mb-4">
+                <AlertCircle className="w-5 h-5" />
+                <span>Please log in to upload documents</span>
+              </div>
+            )}
 
             {/* Error Alert */}
             {error && (
@@ -109,7 +117,7 @@ function TextUploadPage() {
                   onChange={(e) => setDeckName(e.target.value)}
                   placeholder="e.g., Biology Chapter 3"
                   className="input input-bordered input-secondary w-full"
-                  disabled={isLoading}
+                  disabled={isLoading || !user}
                   required
                 />
               </div>
@@ -123,7 +131,7 @@ function TextUploadPage() {
                   accept=".txt"
                   onChange={handleFileChange}
                   className="file-input file-input-bordered file-input-secondary w-full"
-                  disabled={isLoading}
+                  disabled={isLoading || !user}
                 />
                 <label className="label">
                   <span className="label-text-alt">
@@ -144,7 +152,7 @@ function TextUploadPage() {
                 <button
                   type="submit"
                   className="btn btn-secondary"
-                  disabled={!file || !deckName || isLoading}
+                  disabled={!file || !deckName || isLoading || !user}
                 >
                   {isLoading ? (
                     <>
