@@ -1,289 +1,596 @@
-"""
-This Service accomplishes the same thing as langgraph_service
-BUT we'll use an AGENT in the routing node instead of keyword matching
-The vectorDB retrieval nodes become tools
-The chat nodes pretty much stay the same
-"""
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, TypedDict
 
-from typing import Annotated, Any, TypedDict
-
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, add_messages
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
+from langgraph.graph import END, StateGraph
 
-from app.core.config import settings
-from app.models import FlashCard
-from app.services.vector_db import search
-
-llm = ChatOllama(
-    model="llama3.2:3b-instruct-q4_K_M",  # Quantized for speed
+# Initialize the chat model
+chat_model = ChatOllama(
+    model="llama3.2:3b-instruct-q4_K_M",
     base_url="http://ollama:11434",
-    temperature=0.3,  # More deterministic
-    num_predict=2048,  # Limit response length
-    num_ctx=4096,  # Good context window
-    repeat_penalty=1.1,  # Reduce repetition
-    top_k=40,  # Sampling parameter
-    top_p=0.9,  # Nucleus sampling
+    temperature=0.7,
 )
 
-ollama_embedding = OllamaEmbeddings(
-    model="nomic-embed-text", base_url="http://ollama:11434"
-)
+# Thread pool for running async code
+executor = ThreadPoolExecutor(max_workers=3)
 
 
-# Same state as the old service
-class GraphState(TypedDict, total=False):  # total=False makes all fields optional
-    query: str
-    route: str
-    docs: list[dict[str, Any]]
-    answer: str
-    # with add_messages reducer
-    message_memory: Annotated[list[BaseMessage], add_messages]
+class StudySessionState(TypedDict):
+    """State for the study session graph."""
+
+    messages: list  # Conversation history
+    user_id: str  # User ID for card retrieval
+    study_topic: str | None  # What the user wants to study
+    retrieved_cards: list[dict]  # Flashcards from RAG
+    asked_card_indices: list[int]  # Indices of cards already asked
+    current_card: dict | None  # Current flashcard being asked
+    user_answer: str | None  # User's answer to current question
+    score: int | None  # Score for current answer (1-10)
+    session_scores: list[dict]  # History of all scores
+    session_complete: bool  # Whether study session is done
+    current_step: str  # Track which step we're on
+    needs_user_input: bool  # Flag to indicate we're waiting for user
 
 
-# TOOLS ---------------------------
-# The agentic route node will use one or none of these based on the User's query
-# Remember, tools are just python functions that an agent CAN execute at run time
-# We also won't directly use state in a tool. The agent calls these.
-# IMPORTANT: Each tool needs '''docstrings''' to describe what they do for the agent
-
-
-@tool(name_or_callable="search_cards")
-def search_cards_tool(
-    query: str,
-    k: int = 10,
-    collection: str = "flash_cards",
-) -> list[dict[str, Any]]:
+def create_search_flashcards_tool(db_session, user_id: str):
     """
-    Based on the user's input, the "query" arg, do a semantic for existing flash cards.
-    Retrieve relevant flash cards from the flash_cards vectorDB collection.
+    Factory function to create a search tool bound to a specific DB session and user.
     """
-    print("Extracting flash card data.")
-    # db: AsyncSession = Depends(get_db)
-    query_embedding = ollama_embedding.embed_query(text=query)
 
-    engine = create_engine(settings.database_url)
+    @tool
+    def search_flashcards(topic: str) -> List[dict]:
+        """
+        Search for flashcards relevant to the given topic using semantic search.
 
-    # Use the engine within a session context
-    with Session(engine) as db:
-        search_query = (
-            select(FlashCard)
-            .order_by(
-                # The cosine_distance method translates to the <=> operator
-                FlashCard.embedding.cosine_distance(query_embedding)
-            )
-            .limit(10)
+        Args:
+            topic: The study topic to search for (e.g., "photosynthesis", "calculus")
+
+        Returns:
+            List of flashcard dictionaries with 'id', 'question', and 'answer' keys
+        """
+        from sqlalchemy import select
+
+        from app.models.flashcard import Deck, FlashCard
+        from app.services.flashcard import ollama_embedding
+
+        def sync_search():
+            """Synchronous wrapper that runs async code in a thread."""
+
+            async def async_search():
+                """Async search implementation."""
+                try:
+                    print(f"Searching for flashcards about: {topic}")
+
+                    # Generate embedding for the topic
+                    query_embedding = ollama_embedding.embed_query(text=topic)
+
+                    # Search with vector similarity
+                    search_query = (
+                        select(FlashCard)
+                        .join(Deck, FlashCard.deck_id == Deck.id)
+                        .where(Deck.user_id == user_id)
+                        .order_by(FlashCard.embedding.cosine_distance(query_embedding))
+                        .limit(5)
+                    )
+
+                    result = await db_session.execute(search_query)
+                    flash_cards = result.scalars().all()
+
+                    # Convert to dict format
+                    cards = [
+                        {
+                            "id": str(card.id),
+                            "question": card.question,
+                            "answer": card.answer,
+                        }
+                        for card in flash_cards
+                    ]
+
+                    print(f"Found {len(cards)} flashcards")
+                    return cards
+
+                except Exception as e:
+                    print(f"Error in async search: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+                    return []
+
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(async_search())
+                return result
+            finally:
+                loop.close()
+
+        # Run the sync wrapper in a thread pool
+        try:
+            future = executor.submit(sync_search)
+            result = future.result(timeout=30)  # 30 second timeout
+            return result
+        except Exception as e:
+            print(f"Error in search tool: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return []
+
+    return search_flashcards
+
+
+def build_agentic_graph(search_tool):
+    """
+    Build a LangGraph for interactive study sessions.
+
+    Args:
+        search_tool: LangChain tool for searching flashcards
+
+    Returns:
+        Compiled LangGraph
+    """
+
+    # Node 1: Greet and ask what to study
+    def greet_user(state: StudySessionState) -> StudySessionState:
+        """Start the conversation and ask what the user wants to study."""
+        print("Node: greet_user")
+
+        greeting = AIMessage(
+            content="""Hello! I'm your AI study assistant! 📚
+
+            I'll help you study by quizzing you on flashcards. 
+
+            What topic would you like to study today? For example:
+            - "photosynthesis"
+            - "World War 2"
+            - "calculus"
+            - "Python programming"
+
+            Just tell me what you'd like to focus on!"""
         )
 
-        result = db.execute(search_query)
+        state["messages"].append(greeting)
+        state["session_complete"] = False
+        state["asked_card_indices"] = []
+        state["session_scores"] = []
+        state["current_step"] = "waiting_for_topic"
+        state["needs_user_input"] = True
 
-        results = result.scalars().all()
-        # return flash_cards
+        return state
 
-        # Save the results of the similarity search
-        # results: Unknown = db_instance.similarity_search_with_score(query, k=k)
-        print("The flash card search results are: ", results)
+    # Node 2: Extract study topic from user's message
+    def extract_topic(state: StudySessionState) -> StudySessionState:
+        """Extract the study topic from the user's message."""
+        print("Node: extract_topic")
 
-        # Return the results as a list of dicts with the expected fields
-        return [
-            {
-                "text": f"Question: {result.question} Answer: {result.answer}",
-                "metadata": {"id": str(result.id), "deck": str(result.deck_id)},
-            }
-            for result in results
+        # Get the last user message
+        user_messages = [
+            msg for msg in state["messages"] if isinstance(msg, HumanMessage)
         ]
+        if not user_messages:
+            state["current_step"] = "waiting_for_topic"
+            state["needs_user_input"] = True
+            return state
 
+        last_message = user_messages[-1].content
 
-@tool(name_or_callable="extract_cards")
-def extract_cards_tool(query: str) -> list[dict[str, Any]]:
-    """
-    Based on the user's input, the "query" arg, do a semantic search.
-    Retrieve relevant evil items or products based on the evil_items vectorDB collection.
-    """
-    print("Extracting flash card data.")
-    return search(query, k=5, collection="flash_cards")
+        # Use LLM to extract topic
+        extraction_prompt = f"""Extract the main study topic from this message. Return ONLY the topic, nothing else.
 
+        User message: "{last_message}"
 
-# Some variables that will help us make the agent aware of the tools
+        Topic:"""
 
-# List of the available tools
-TOOLS = [extract_cards_tool, search_cards_tool]
+        response = chat_model.invoke(extraction_prompt)
+        topic = response.content.strip()
 
-# Map tool names to their functions in a scalable way
-# We need this to call tools by their name in the agentic router node
-# (See us defining and assigning names in the agentic router node)
-TOOL_MAP = {tool.name: tool for tool in TOOLS}
+        state["study_topic"] = topic
+        state["current_step"] = "topic_extracted"
+        state["needs_user_input"] = False
+        print(f"Extracted topic: {topic}")
 
-# Get a version of the LLM that is aware of its toolbox
-llm_with_tools = llm.bind_tools(TOOLS)
+        return state
 
-# NODES (including our agentic router)--------------------------------------------
+    # Node 3: Search for flashcards using the tool
+    def search_flashcards_node(state: StudySessionState) -> StudySessionState:
+        """Use the search tool to retrieve relevant flashcards."""
+        print("Node: search_flashcards")
 
+        topic = state["study_topic"]
 
-# Here's the AGENT part - this routing node uses agentic AI to determine what tool to call, if any
-def agentic_router_node(state: GraphState) -> GraphState:
-    # Get the user query from State
-    query = state.get("query", "")
-
-    # Using this different chat prompting style just cuz it looks cool
-    # Feel free to use the typical prompt string like we've been doing
-    messages = [
-        SystemMessage(
-            content=(
-                """
-            You are an internal agent that decides whether VectorDB retrieval is needed. 
-            If the User is asking about studying or material use the "search_cards" tool. 
-            If neither applies or the user is just stating something, it's a general chat. 
-            DO NOT call a tool for general chats. 
-            If you call a tool, call EXACTLY ONE tool.
-            """
+        if not topic:
+            state["messages"].append(
+                AIMessage(
+                    content="I couldn't understand what you'd like to study. Could you please tell me the topic again?"
+                )
             )
-        ),
-        HumanMessage(content=query),
-    ]
+            state["retrieved_cards"] = []
+            state["current_step"] = "waiting_for_topic"
+            state["needs_user_input"] = True
+            return state
 
-    # First LLM call to decide which tool to use
-    agentic_response = llm_with_tools.invoke(messages)
+        # Call the tool
+        try:
+            print(f"Invoking search tool for topic: {topic}")
+            flashcards = search_tool.invoke({"topic": topic})
 
-    # If there was no tool call, route to general chat
-    # tool_calls contains a list of ToolCall objects, which has metadata like the tool name
-    if not agentic_response.tool_calls:
-        return {"route": "chat"}
+            if not flashcards:
+                state["messages"].append(
+                    AIMessage(
+                        content=f"I couldn't find any flashcards about '{topic}'. Would you like to study something else?"
+                    )
+                )
+                state["retrieved_cards"] = []
+                state["session_complete"] = True
+                state["current_step"] = "session_complete"
+                state["needs_user_input"] = False
+            else:
+                # Store the flashcards
+                state["retrieved_cards"] = flashcards
 
-    # If a tool WAS called, invoke it and store results and the appropriate route in State
-    tool_call = agentic_response.tool_calls[0]  # We only expect one tool call
-    tool_name = tool_call["name"]  # Extract the name of the tool that was called
+                state["messages"].append(
+                    AIMessage(
+                        content=f"Great! I found {len(flashcards)} flashcards about '{topic}'. Let's start studying! 🎓"
+                    )
+                )
+                state["current_step"] = "ready_to_ask"
+                state["needs_user_input"] = False
 
-    # Finally, here's us actually invoking the tool by name
-    results = TOOL_MAP[tool_name].invoke({"query": query})
+                print(f"Retrieved {len(flashcards)} flashcards")
 
-    # Automatically set the route to the answer_with_context node
-    return {"route": "answer", "docs": results}
+        except Exception as e:
+            print(f"Error using search tool: {e}")
+            import traceback
 
+            traceback.print_exc()
+            state["messages"].append(
+                AIMessage(
+                    content=f"Sorry, I had trouble finding flashcards. Error: {str(e)}"
+                )
+            )
+            state["retrieved_cards"] = []
+            state["session_complete"] = True
+            state["current_step"] = "session_complete"
+            state["needs_user_input"] = False
 
-# ANSWER WITH CONTEXT & GENERAL CHAT will stay the same as before :)
+        return state
 
+    # Node 4: Ask a question from flashcards
+    def ask_question(state: StudySessionState) -> StudySessionState:
+        """Select an unasked flashcard and ask the question."""
+        print("Node: ask_question")
 
-# The node that answers the user's query based on docs retrieved from either "extract" node
-def answer_with_context_node(state: GraphState):
-    print("Answering with context")
-    query = state.get("query", "")
-    docs = state.get("docs", [])
-    combined_docs = "\n\n".join(item["text"] for item in docs)
-    print("The combined docs are: ", combined_docs)
+        cards = state["retrieved_cards"]
+        asked_indices = state["asked_card_indices"]
 
-    prompt = f"""You are an tutor helping a student studying for an exam.
-        You are helpful and want the student to do their best.
-        Select a question based ONLY on the Data below.
-        Ask the user a question they haven't already been asked."
-        If there is a previous response to a question grade the user's last answer from 1 - 10 with 10 being best.
-        Explain to the user how they can improve their answer.
+        # Find an unasked card
+        unasked_indices = [i for i in range(len(cards)) if i not in asked_indices]
 
-        Flash Card Data:\n{combined_docs}"
-        User Query:\n{query}"
-        Answer: """
+        if not unasked_indices:
+            # No more cards to ask
+            state["session_complete"] = True
+            state["current_step"] = "session_complete"
+            state["needs_user_input"] = False
 
-    response = llm.invoke(prompt)
-    # return {"answer": response}
-    return {
-        "route": "grade",
-        "answer": response,
-        "message_memory": [
-            HumanMessage(content=query),
-            AIMessage(content=response.content),
-        ],
-    }
-    # return {"answer": response}
+            # Calculate final statistics
+            scores = state["session_scores"]
+            if scores:
+                avg_score = sum(s["score"] for s in scores) / len(scores)
 
+                summary = f"""🎉 Great job! You've completed all the flashcards!
 
-# The node that answers the user's query based on docs retrieved from either "extract" node
-def grade_the_answer_node(state: GraphState) -> GraphState:
-    query = state.get("query", "")
-    docs = state.get("docs", [])
-    combined_docs = "\n\n".join(item["text"] for item in docs)
-    checkpointer = MemorySaver()
-    checkpointer.delete_thread(thread_id="demo_thread")
+                📊 Your Results:
+                - Questions answered: {len(scores)}
+                - Average score: {avg_score:.1f}/10
 
-    prompt = f"""You are an tutor helping a student studying for an exam.
-        You are helpful and want the student to do their best.
-        Grade the user's answer from 1 - 10 with 10 being best.
-        Explain to the user how they can improve their answer.
-        Extracted Data:\n{combined_docs}
-        User Answer:\n{query}
-        Answer: """
+                """
+                # Show breakdown by performance
+                excellent = [s for s in scores if s["score"] >= 8]
+                good = [s for s in scores if 6 <= s["score"] < 8]
+                needs_work = [s for s in scores if s["score"] < 6]
 
-    response = llm.invoke(prompt)
-    # return {"answer": response}
-    return {
-        "route": "grade",
-        "answer": response,
-        "message_memory": [
-            HumanMessage(content=query),
-            AIMessage(content=response.content),
-        ],
-    }
+                summary += f"✅ Excellent (8-10): {len(excellent)}\n"
+                summary += f"👍 Good (6-7): {len(good)}\n"
+                summary += f"📖 Needs review (1-5): {len(needs_work)}\n"
 
+                if needs_work:
+                    summary += "\n💡 Topics to review:\n"
+                    for s in needs_work[:3]:  # Show top 3
+                        summary += f"- {s['question'][:50]}...\n"
 
-# Here's the fallback node for general chats (no tools)
-def general_chat_node(state: GraphState) -> GraphState:
-    prompt = f"""You are an internal assistant at the Evil Scientist Corp.
-        You are pretty evil yourself, but still helpful.
-        You have context from previous interactions: \n{state.get("message_memory")}
-        Answer the User's Query to the best of your ability.
-        User Query:\n{state.get("query", "")}
-        Answer: """
+                summary += "\nWould you like to study another topic?"
 
-    result = llm.invoke(prompt).content
-    return {
-        "answer": result,
-        "message_memory": [
-            HumanMessage(content=state.get("query")),
-            AIMessage(content=result),
-        ],
-    }
+                state["messages"].append(AIMessage(content=summary))
+            else:
+                state["messages"].append(
+                    AIMessage(
+                        content="We're done! Would you like to study another topic?"
+                    )
+                )
 
+            return state
 
-# THE GRAPH BUILDER --------------------------------
-# Mostly the same, but uses our new agentic router, and the tools are no longer nodes
-def build_agentic_graph():
-    # Define the graph state and the build variable
-    build = StateGraph(GraphState)
+        # Get next unasked card
+        next_index = unasked_indices[0]
+        card = cards[next_index]
 
-    # Register each node within the graph
-    # NOTE: extract_cards and extract_plans are TOOLS now, not nodes
-    build.add_node("route", agentic_router_node)
-    build.add_node("answer", answer_with_context_node)
-    build.add_node("chat", general_chat_node)
-    build.add_node("grade", grade_the_answer_node)
+        state["current_card"] = card
+        state["asked_card_indices"].append(next_index)
 
-    # Set our entry point node (the first one to invoke after a user query)
-    build.set_entry_point("route")
+        # Ask the question
+        remaining = len(unasked_indices)
+        question_msg = f"""Question {len(asked_indices) + 1}/{len(cards)} ❓
 
-    # After the router runs, conditionally choose the next node based on "route" in state
-    build.add_conditional_edges(
-        "route",  # Based on the "route" state field...
-        lambda state: state["route"],  # Getting the value
+        {card["question"]}
+
+        Take your time and answer as best as you can!"""
+
+        state["messages"].append(AIMessage(content=question_msg))
+        state["current_step"] = "waiting_for_answer"
+        state["needs_user_input"] = True
+
+        return state
+
+    # Node 5: Grade the user's answer
+    def grade_answer(state: StudySessionState) -> StudySessionState:
+        """Grade the user's answer and provide feedback."""
+        print("Node: grade_answer")
+
+        current_card = state["current_card"]
+
+        # Get the user's answer (last human message)
+        user_messages = [
+            msg for msg in state["messages"] if isinstance(msg, HumanMessage)
+        ]
+        if not user_messages:
+            return state
+
+        user_answer = user_messages[-1].content
+        state["user_answer"] = user_answer
+
+        # Use LLM to grade the answer
+        grading_prompt = f"""You are grading a student's answer to a flashcard question.
+
+        Question: {current_card["question"]}
+        Correct Answer: {current_card["answer"]}
+        Student's Answer: {user_answer}
+
+        Grade the student's answer on a scale from 1-10 where:
+        - 10: Perfect, complete answer
+        - 8-9: Very good, mostly correct
+        - 6-7: Good effort, partially correct
+        - 4-5: Some understanding, needs improvement
+        - 1-3: Incorrect or shows misunderstanding
+
+        Provide:
+        1. A score (1-10)
+        2. Brief feedback (2-3 sentences)
+        3. If score < 8, explain what was missing
+
+        Return ONLY valid JSON:
+        {{
+        "score": 8,
+        "feedback": "Your feedback here",
+        "correct_answer": "{current_card["answer"]}"
+        }}
+
+        JSON:"""
+
+        try:
+            response = chat_model.invoke(grading_prompt)
+            content = response.content.strip()
+
+            # Extract JSON
+            import re
+
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                content = json_match.group()
+
+            result = json.loads(content)
+
+            score = result.get("score", 5)
+            feedback = result.get("feedback", "Good try!")
+            correct_answer = result.get("correct_answer", current_card["answer"])
+
+            # Ensure score is between 1-10
+            score = max(1, min(10, score))
+
+            state["score"] = score
+
+            # Record score
+            state["session_scores"].append(
+                {
+                    "question": current_card["question"],
+                    "user_answer": user_answer,
+                    "correct_answer": correct_answer,
+                    "score": score,
+                    "feedback": feedback,
+                }
+            )
+
+            # Create feedback message with emoji
+            if score >= 9:
+                emoji = "🌟"
+                grade_text = "Excellent!"
+            elif score >= 7:
+                emoji = "👍"
+                grade_text = "Good job!"
+            elif score >= 5:
+                emoji = "📚"
+                grade_text = "Not bad!"
+            else:
+                emoji = "💡"
+                grade_text = "Keep practicing!"
+
+            feedback_msg = f"""{emoji} Score: {score}/10 - {grade_text}
+
+            {feedback}
+
+            📖 Correct answer: {correct_answer}
+
+            Ready for the next question? Just say "next" or "continue"!"""
+
+            state["messages"].append(AIMessage(content=feedback_msg))
+            state["current_step"] = "waiting_for_continue"
+            state["needs_user_input"] = True
+
+        except Exception as e:
+            print(f"Error grading answer: {e}")
+            state["messages"].append(
+                AIMessage(
+                    content="I had trouble grading your answer, but let's continue!"
+                )
+            )
+            state["score"] = 5
+            state["current_step"] = "waiting_for_continue"
+            state["needs_user_input"] = True
+
+        return state
+
+    # Helper function to check if we have a NEW user message
+    def has_new_user_message(state: StudySessionState) -> bool:
+        """Check if there's a user message after the last AI message."""
+        messages = state["messages"]
+        if not messages:
+            return False
+
+        print(f"Checking messages: {messages}")
+        # Find the last AI message index
+        last_ai_index = -1
+        for i in range(len(messages) - 1, -1, -1):
+            if isinstance(messages[i], AIMessage):
+                last_ai_index = i
+                break
+
+        # Check if there's a user message after it
+        if last_ai_index == -1:
+            # No AI message yet, check if there's any user message
+            return any(isinstance(msg, HumanMessage) for msg in messages)
+
+        # Check messages after last AI message
+        for i in range(last_ai_index + 1, len(messages)):
+            if isinstance(messages[i], HumanMessage):
+                return True
+
+        return False
+
+    # Routing function
+    def route_conversation(state: StudySessionState) -> str:
+        """Determine next step based on current state."""
+        current_step = state.get("current_step", "greet")
+
+        print(f"Routing from step: {current_step}")
+        print(f"Needs user input: {state.get('needs_user_input', False)}")
+
+        # Check if we have a new user message
+        has_user_msg = has_new_user_message(state)
+        print(f"Has new user message: {has_user_msg}")
+
+        # Route based on current step
+        if current_step == "greet" or current_step == "start":
+            return "greet_user"
+
+        elif current_step == "waiting_for_topic":
+            if has_user_msg:
+                return "extract_topic"
+            return END
+
+        elif current_step == "topic_extracted":
+            return "search_flashcards"
+
+        elif current_step == "ready_to_ask":
+            return "ask_question"
+
+        elif current_step == "waiting_for_answer":
+            if has_user_msg:
+                # Check if user wants to skip or is answering
+                messages = state["messages"]
+                user_messages = [
+                    msg for msg in messages if isinstance(msg, HumanMessage)
+                ]
+                if user_messages:
+                    last_msg = user_messages[-1].content.lower().strip()
+                    if any(
+                        keyword in last_msg for keyword in ["next", "continue", "skip"]
+                    ):
+                        return "ask_question"
+                    else:
+                        return "grade_answer"
+            return END
+
+        elif current_step == "waiting_for_continue":
+            if has_user_msg:
+                return "ask_question"
+            return END
+
+        elif current_step == "session_complete":
+            return END
+
+        return END
+
+    # Build the graph
+    workflow = StateGraph(StudySessionState)
+
+    # Add all nodes
+    workflow.add_node("greet_user", greet_user)
+    workflow.add_node("extract_topic", extract_topic)
+    workflow.add_node("search_flashcards", search_flashcards_node)
+    workflow.add_node("ask_question", ask_question)
+    workflow.add_node("grade_answer", grade_answer)
+
+    # Conditional entry point based on state
+    def entry_router(state: StudySessionState) -> str:
+        """Determine entry point based on whether we're starting or continuing."""
+        current_step = state.get("current_step", "start")
+
+        print(f"Entry router - current_step: {current_step}")
+
+        # If starting a new session, greet
+        if current_step == "start":
+            return "greet_user"
+
+        # Otherwise, route based on current step
+        return route_conversation(state)
+
+    # Set entry point to router
+    workflow.set_conditional_entry_point(
+        entry_router,
         {
-            "answer": "answer",  # If route is "answer, go to answer node
-            "chat": "chat",  # Otherwise, go to chat node
+            "greet_user": "greet_user",
+            "extract_topic": "extract_topic",
+            "search_flashcards": "search_flashcards",
+            "ask_question": "ask_question",
+            "grade_answer": "grade_answer",
+            END: END,
         },
     )
-    # build.add_edge("answer", "grade")
-    # build.add_edge("grade", "answer")
 
-    # After answer OR chat invoke, we're done! Set that.
-    # build.set_finish_point("answer")
-    build.set_finish_point("chat")
-    build.set_finish_point("grade")
+    # All nodes route through the same routing function
+    for node_name in [
+        "greet_user",
+        "extract_topic",
+        "search_flashcards",
+        "ask_question",
+        "grade_answer",
+    ]:
+        workflow.add_conditional_edges(
+            node_name,
+            route_conversation,
+            {
+                "greet_user": "greet_user",
+                "extract_topic": "extract_topic",
+                "search_flashcards": "search_flashcards",
+                "ask_question": "ask_question",
+                "grade_answer": "grade_answer",
+                END: END,
+            },
+        )
 
-    # Finally, compile and return the graph, with a Memory Checkpointer
-    return build.compile(checkpointer=MemorySaver())
-
-
-# Create a singleton instance of the graph for use in the router endpoint
-agentic_graph = build_agentic_graph()
+    # Compile the graph
+    return workflow.compile()
