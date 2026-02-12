@@ -150,7 +150,7 @@ psql -U postgres -c "CREATE DATABASE flashcarddb;"
 3. **Set up Ollama**:
 
 ```bash
-# Install Ollama (visit https://ollama.ai)
+# Install Ollama (visit https://ollama.com)
 # Pull required models
 ollama pull llama3.2:3b-instruct-q4_K_M
 ollama pull nomic-embed-text:latest
@@ -330,4 +330,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Powered by [LangChain](https://www.langchain.com/)
 - UI components from [TanStack](https://tanstack.com/)
 - Styled with [Tailwind CSS](https://tailwindcss.com/)
-- Local AI with [Ollama](https://ollama.ai/)
+- Local AI with [Ollama](https://ollama.com/)
