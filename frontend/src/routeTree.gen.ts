@@ -13,7 +13,9 @@ import { Route as UploadTextRouteImport } from './routes/upload-text'
 import { Route as UploadJsonRouteImport } from './routes/upload-json'
 import { Route as StudyRouteImport } from './routes/study'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as PracticeRouteImport } from './routes/practice'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as CreateDeckRouteImport } from './routes/create-deck'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UploadTextRoute = UploadTextRouteImport.update({
@@ -36,9 +38,19 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PracticeRoute = PracticeRouteImport.update({
+  id: '/practice',
+  path: '/practice',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateDeckRoute = CreateDeckRouteImport.update({
+  id: '/create-deck',
+  path: '/create-deck',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -49,7 +61,9 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/create-deck': typeof CreateDeckRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
   '/search': typeof SearchRoute
   '/study': typeof StudyRoute
   '/upload-json': typeof UploadJsonRoute
@@ -57,7 +71,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/create-deck': typeof CreateDeckRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
   '/search': typeof SearchRoute
   '/study': typeof StudyRoute
   '/upload-json': typeof UploadJsonRoute
@@ -66,7 +82,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/create-deck': typeof CreateDeckRoute
   '/login': typeof LoginRoute
+  '/practice': typeof PracticeRoute
   '/search': typeof SearchRoute
   '/study': typeof StudyRoute
   '/upload-json': typeof UploadJsonRoute
@@ -76,17 +94,29 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/create-deck'
     | '/login'
+    | '/practice'
     | '/search'
     | '/study'
     | '/upload-json'
     | '/upload-text'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/search' | '/study' | '/upload-json' | '/upload-text'
+  to:
+    | '/'
+    | '/create-deck'
+    | '/login'
+    | '/practice'
+    | '/search'
+    | '/study'
+    | '/upload-json'
+    | '/upload-text'
   id:
     | '__root__'
     | '/'
+    | '/create-deck'
     | '/login'
+    | '/practice'
     | '/search'
     | '/study'
     | '/upload-json'
@@ -95,7 +125,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CreateDeckRoute: typeof CreateDeckRoute
   LoginRoute: typeof LoginRoute
+  PracticeRoute: typeof PracticeRoute
   SearchRoute: typeof SearchRoute
   StudyRoute: typeof StudyRoute
   UploadJsonRoute: typeof UploadJsonRoute
@@ -132,11 +164,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/practice': {
+      id: '/practice'
+      path: '/practice'
+      fullPath: '/practice'
+      preLoaderRoute: typeof PracticeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create-deck': {
+      id: '/create-deck'
+      path: '/create-deck'
+      fullPath: '/create-deck'
+      preLoaderRoute: typeof CreateDeckRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -151,7 +197,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CreateDeckRoute: CreateDeckRoute,
   LoginRoute: LoginRoute,
+  PracticeRoute: PracticeRoute,
   SearchRoute: SearchRoute,
   StudyRoute: StudyRoute,
   UploadJsonRoute: UploadJsonRoute,

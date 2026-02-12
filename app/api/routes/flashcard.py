@@ -23,7 +23,9 @@ from app.services.flashcard import (
     create_flashcard,
     delete_flashcard,
     embed_and_store_flashcards,
+    get_deck_cards,
     get_flashcard,
+    get_user_decks,
     process_text_file_to_flashcards,
     search_flashcard,
     update_card,
@@ -238,6 +240,52 @@ async def upload_text_file_for_flashcards(
         raise HTTPException(
             status_code=500, detail=f"Failed to process text file: {str(e)}"
         )
+
+
+# Add this endpoint (place it before /deck/{deck_id}/cards to avoid route conflicts)
+@router.get("/decks", response_model=List[DeckRead])
+async def get_user_deck_list(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Get all decks for the current user.
+
+    Returns:
+        List of decks owned by the user
+    """
+    decks = await get_user_decks(db, user_id=str(user.id))
+    return decks
+
+
+@router.get("/deck/{deck_id}/cards", response_model=List[FlashcardBase])
+async def get_cards_by_deck_id(
+    deck_id: int,  # Changed from str to int
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """
+    Get all flashcards for a specific deck.
+    Only the deck owner can access their deck's cards.
+
+    Args:
+        deck_id: The integer ID of the deck
+
+    Returns:
+        List of flashcards in the deck
+
+    Raises:
+        HTTPException: 404 if deck not found or 403 if user doesn't own the deck
+    """
+    flashcards = await get_deck_cards(db, deck_id, user_id=str(user.id))
+
+    if flashcards is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Deck not found or you don't have permission to access it",
+        )
+
+    return flashcards
 
 
 @router.get("/{card_id}", response_model=FlashcardBase)

@@ -21,7 +21,7 @@ class DeckBase(BaseModel):
 
 
 class DeckRead(DeckBase):
-    id: UUID
+    id: int
     user_id: UUID
 
 

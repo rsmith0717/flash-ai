@@ -126,6 +126,60 @@ async def create_deck(db: AsyncSession, name: str, user_id: str) -> Deck:
     return new_deck
 
 
+async def get_user_decks(db: AsyncSession, user_id: str) -> list[Deck]:
+    """
+    Get all decks for a specific user.
+
+    Args:
+        db: Database session
+        user_id: ID of the user
+
+    Returns:
+        List of Deck objects owned by the user
+    """
+    stmt = select(Deck).where(Deck.user_id == user_id)
+    result = await db.execute(stmt)
+    decks = result.scalars().all()
+    return list(decks)
+
+
+async def get_deck_cards(
+    db: AsyncSession,
+    deck_id: int,
+    user_id: str,  # Changed deck_id from str to int
+) -> list[FlashCard] | None:
+    """
+    Get all flashcards for a specific deck.
+    Verifies deck ownership before returning cards.
+
+    Args:
+        db: Database session
+        deck_id: Integer ID of the deck
+        user_id: ID of the user requesting the cards
+
+    Returns:
+        List of FlashCard objects if deck exists and user owns it, None otherwise
+    """
+    # First verify the deck exists and user owns it
+    deck_stmt = select(Deck).where(Deck.id == deck_id)
+    deck_result = await db.execute(deck_stmt)
+    deck = deck_result.scalar_one_or_none()
+
+    if deck is None:
+        return None
+
+    # Check ownership
+    if str(deck.user_id) != str(user_id):
+        return None
+
+    # Get all flashcards for this deck
+    cards_stmt = select(FlashCard).where(FlashCard.deck_id == deck_id)
+    cards_result = await db.execute(cards_stmt)
+    flashcards = cards_result.scalars().all()
+
+    return list(flashcards)
+
+
 async def embed_and_store_flashcards(
     db: AsyncSession, deck_name: str, flashcards: list[dict], user_id: str
 ):
