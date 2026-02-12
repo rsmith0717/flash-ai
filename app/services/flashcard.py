@@ -13,9 +13,14 @@ ollama_embedding = OllamaEmbeddings(
 
 # Initialize ChatOllama for the agentic chunker
 ollama_chat = ChatOllama(
-    model="llama3.2:3b",  # The model we're using (we installed llama3.2:3b)
-    temperature=0.2,  # Temp goes from 0-1. Higher temp = more creativity
+    model="llama3.2:3b-instruct-q4_K_M",  # Quantized for speed
     base_url="http://ollama:11434",
+    temperature=0.3,  # More deterministic
+    num_predict=2048,  # Limit response length
+    num_ctx=4096,  # Good context window
+    repeat_penalty=1.1,  # Reduce repetition
+    top_k=40,  # Sampling parameter
+    top_p=0.9,  # Nucleus sampling
 )
 
 
@@ -195,28 +200,68 @@ async def process_text_file_to_flashcards(
         chunker = AgenticChunker(model=ollama_chat)
 
         # Process the text and extract QA pairs
-        chunks = chunker.chunk_text(text_content)
+        chunks = await chunker.chunk_text_async(text_content)
 
         print(f"Generated {len(chunks)} chunks from text")
 
         # Extract all QA pairs from chunks
         all_qa_pairs = chunker.get_all_qa_pairs(chunks)
 
-        print(f"Extracted {len(all_qa_pairs)} QA pairs")
+        print(f"Extracted {len(all_qa_pairs)} QA pairs before filtering")
 
         if not all_qa_pairs:
             raise ValueError(
                 "No question-answer pairs could be extracted from the text"
             )
 
-        # Convert QA pairs to the format expected by embed_and_store_flashcards
-        flashcards = [
-            {"question": qa["question"], "answer": qa["answer"]} for qa in all_qa_pairs
-        ]
+        # FILTER: Remove any QA pairs with empty questions or answers
+        filtered_qa_pairs = []
+        rejected_count = 0
+
+        for qa in all_qa_pairs:
+            question = qa.get("question", "").strip()
+            answer = qa.get("answer", "").strip()
+
+            # Strict validation
+            if not question or len(question) < 5:
+                print(f"  ❌ Rejected - Invalid question: '{question}'")
+                rejected_count += 1
+                continue
+
+            if not answer or len(answer) < 3:
+                print(f"  ❌ Rejected - Invalid answer for '{question}': '{answer}'")
+                rejected_count += 1
+                continue
+
+            # Check for generic/placeholder answers
+            if answer.lower() in [
+                "it",
+                "this",
+                "that",
+                "something",
+                "unknown",
+                "n/a",
+                "none",
+            ]:
+                print(f"  ❌ Rejected - Placeholder answer: '{answer}'")
+                rejected_count += 1
+                continue
+
+            # All checks passed
+            filtered_qa_pairs.append({"question": question, "answer": answer})
+
+        print(
+            f"Filtered: {len(filtered_qa_pairs)} valid QA pairs, {rejected_count} rejected"
+        )
+
+        if not filtered_qa_pairs:
+            raise ValueError(
+                f"All {len(all_qa_pairs)} extracted QA pairs were invalid. Please check your document content."
+            )
 
         # Use existing function to embed and store flashcards
         db_flashcards = await embed_and_store_flashcards(
-            db=db, deck_name=deck_name, flashcards=flashcards, user_id=user_id
+            db=db, deck_name=deck_name, flashcards=filtered_qa_pairs, user_id=user_id
         )
 
         return db_flashcards

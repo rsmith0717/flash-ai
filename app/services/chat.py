@@ -21,9 +21,14 @@ from app.models import FlashCard
 from app.services.vector_db import search
 
 llm = ChatOllama(
-    model="llama3.2:3b",  # The model we're using (we installed llama3.2:3b)
-    temperature=0.2,  # Temp goes from 0-1. Higher temp = more creativity
+    model="llama3.2:3b-instruct-q4_K_M",  # Quantized for speed
     base_url="http://ollama:11434",
+    temperature=0.3,  # More deterministic
+    num_predict=2048,  # Limit response length
+    num_ctx=4096,  # Good context window
+    repeat_penalty=1.1,  # Reduce repetition
+    top_k=40,  # Sampling parameter
+    top_p=0.9,  # Nucleus sampling
 )
 
 ollama_embedding = OllamaEmbeddings(

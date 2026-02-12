@@ -22,7 +22,7 @@ services:
       - ollama.env
     environment:
       - OLLAMA_HOST=0.0.0.0
-      - APP_CHAT_MODEL=llama3.2:3b
+      - APP_CHAT_MODEL=llama3.2:3b-instruct-q4_K_M
       - APP_EMBEDDING_MODEL=nomic-embed-text:latest
     deploy:
       resources:
