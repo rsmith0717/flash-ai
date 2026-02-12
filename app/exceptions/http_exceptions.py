@@ -11,8 +11,8 @@ class EmailAlreadyExistsException(HTTPException):
         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class PayrollNotFoundException(HTTPException):
-    def __init__(self, detail: str = "Payroll not found"):
+class FlashcardNotFoundException(HTTPException):
+    def __init__(self, detail: str = "Flashcard not found"):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 

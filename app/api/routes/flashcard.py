@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.init_db import get_db
 from app.exceptions.http_exceptions import (
     InvalidPayScheduleException,
-    PayrollNotFoundException,
+    FlashcardNotFoundException,
 )
 from app.models import User
 from app.schemas.flashcard import (
@@ -290,17 +290,17 @@ async def get_cards_by_deck_id(
 
 @router.get("/{card_id}", response_model=FlashcardBase)
 async def get_flashcard_by_id(card_id: str, db: AsyncSession = Depends(get_db)):
-    db_payroll = await get_flashcard(db, card_id)
-    if db_payroll is None:
-        raise PayrollNotFoundException()
-    return db_payroll
+    db_flashcard = await get_flashcard(db, card_id)
+    if db_flashcard is None:
+        raise FlashcardNotFoundException()
+    return db_flashcard
 
 
 @router.delete("/{card_id}")
 async def delete_flashcard_by_id(card_id: str, db: AsyncSession = Depends(get_db)):
     success = await delete_flashcard(db, card_id)
     if not success:
-        raise PayrollNotFoundException()
+        raise FlashcardNotFoundException()
     return {"ok": True}
 
 
@@ -310,7 +310,7 @@ async def update_flashcard(
 ):
     db_flashcard = await update_card(db, card_id, flashcard)
     if db_flashcard is None:
-        raise PayrollNotFoundException()
+        raise FlashcardNotFoundException()
     return db_flashcard
 
 

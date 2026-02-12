@@ -4,23 +4,6 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services.user import auth_backend, current_active_user, fastapi_users
 
-# from app.exceptions.http_exceptions import (
-#     InvalidPayScheduleException,
-#     PayrollNotFoundException,
-# )
-
-# from sqlalchemy.exc import DBAPIError
-# from sqlalchemy.ext.asyncio import AsyncSession
-
-# from app.database.init_db import get_db
-# from app.schemas.payroll import PayrollCreate, PayrollPatch, PayrollRead
-# from app.services.payroll import (
-#     create_payroll,
-#     delete_payroll,
-#     get_payroll,
-#     update_salary,
-# )
-
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
