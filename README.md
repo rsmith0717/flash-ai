@@ -87,7 +87,27 @@ cp ollama.env.example ollama.env
 
 Edit these files if you need to change default values.
 
-### 3. Start the Application
+### 3. Install Just (Optional but Recommended)
+
+If you want to use the convenient `just` commands, install it first:
+
+```bash
+# On macOS
+brew install just
+
+# On Linux
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+# On Windows (using Scoop)
+scoop install just
+
+# Or using Cargo (Rust package manager)
+cargo install just
+```
+
+For other installation methods, visit: https://github.com/casey/just#installation
+
+### 4. Start the Application
 
 ```bash
 # Using Just (recommended)
@@ -103,13 +123,13 @@ This will:
 - Start the FastAPI backend (port 8000)
 - Start the React frontend (port 3000)
 
-### 4. Access the Application
+### 5. Access the Application
 
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/docs
 
-### 5. Create a User
+### 6. Create a User
 
 After the services are running, you can create additional users:
 
